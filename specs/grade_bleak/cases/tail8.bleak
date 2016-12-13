@@ -1,0 +1,18 @@
+input r8
+store r9 7 <- reset
+jzilch r8 print <- read
+input [r9]
+dec r8
+dec r9
+jneg r9 reset
+jmp read
+store r8 8 <- print
+jzilch r8 done <- emit
+output [r9]
+dec r8
+dec r9
+jneg r9 wrap
+jmp emit
+store r9 7 <- wrap
+jmp emit
+dec r8 <- done

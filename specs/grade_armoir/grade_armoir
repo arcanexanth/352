@@ -1,0 +1,219 @@
+#!/usr/bin/env zsh
+
+# ---------------------------------------------------------------------------- 
+
+# Assert that each file has the required tokens.
+function check_tokens() {
+  file=$1
+  shift
+  for i in $*; do
+    grep -- $i $file >/dev/null
+    if [[ $? -ne 0 ]]; then
+      echo "Yikes! Expected $i in $file not found." >& 2
+      exit 1
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------- 
+
+iskey=0
+isgrader=0
+onlylater=0
+while getopts kgl opt; do
+  case $opt in
+    (k)
+      iskey=1
+      ;;
+    (g)
+      isgrader=1
+      ;;
+    (l)
+      onlylater=1
+      ;;
+  esac
+done
+
+graderdir=${0:A:h}
+srcdir=$(pwd)
+libdir=$srcdir/../.tmp
+basedir=${srcdir:t}
+tmp="${srcdir}/.tmp"
+name=armoir
+
+mkdir -p $libdir
+
+# Assert that we're in the right directory.
+if [[ $basedir != $name ]]; then
+  echo "Oh no! The grader must be run from the $name directory." >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------- 
+
+# Assert that all required files exist.
+# expected_files=(BleakVirtualMachine.h BleakVirtualMachine.cpp Makefile main.cpp)
+# for i in $expected_files; do
+  # if [[ ! -f $i ]]; then
+    # echo "Whoops! Expected file $i not found." >&2
+    # exit 1
+  # fi
+# done
+
+# ---------------------------------------------------------------------------- 
+
+# if [[ $isgrader -eq 0 ]]; then
+  # Assert that makefile builds
+  # make 2>&1 >/dev/null
+  # if [[ ! -f BleakVirtualMachine.o ]]; then
+    # echo "Uh oh! No BleakVirtualMachine.o found after running make." >&2
+    # exit 1
+  # fi
+
+  # make clean 2>&1 >/dev/null
+  # if [[ -f BleakVirtualMachine.o || -f main.o ]]; then
+    # echo "Uh oh! Object files (*.o) found after running \"make clean\"." >&2
+    # exit 1
+  # fi
+  # make 2>&1 >/dev/null
+# fi
+
+# ---------------------------------------------------------------------------- 
+
+# gtestdir=$libdir/googletest
+# if [[ ! -d $gtestdir ]]; then
+  # echo "Downloading Google Test..."
+  # if [[ $isgrader -eq 0 ]]; then
+    # out=/dev/stdout
+  # else
+    # out=/dev/null
+  # fi
+  # (cd $libdir &&
+   # git clone https://github.com/google/googletest.git) >& $out
+  # echo
+# fi
+
+# if [[ ! -f $gtestdir/build/lib/libgtest.a ]]; then
+  # echo "Compiling Google Test..."
+  # (cd $gtestdir &&
+   # mkdir -p build &&
+   # cd build &&
+   # cmake -DCMAKE_INSTALL_PREFIX=. .. &&
+   # make &&
+   # make install > /dev/null)
+  # echo
+# fi
+
+# ---------------------------------------------------------------------------- 
+
+CPP=arm-linux-gnueabi-g++
+CFLAGS="-std=c++11"
+
+# ---------------------------------------------------------------------------- 
+
+tests=(
+  inbox
+  color
+  opposed
+  vecsum
+  max
+)
+
+for test in $tests; do
+  if [[ ! -f $test.s ]]; then
+    echo "Uh oh. File $test.s could not be found."
+    echo
+    exit 2
+  fi
+
+  echo "Compiling your $test code and its unit test..."
+  ${CPP} ${=CFLAGS} -static -g -o $libdir/test_$test $test.s $graderdir/test_$test.cpp
+  if [[ $? -ne 0 ]]; then
+    echo "Uh oh. Compiling $test.s with its unit test failed."
+    exit 2
+  fi
+  echo "Compiled successfully. Let's run the test..."
+
+  (cd $libdir && qemu-arm $libdir/test_$test)
+  if [[ $? -ne 0 ]]; then
+    echo "RESULT: UH OH. Not all unit tests in the $tag test passed."
+    echo
+    exit 2
+  else
+    echo "RESULT: OK!"
+  fi
+  echo
+done
+
+if [[ ! -f echo.s ]]; then
+  echo "Uh oh. File echo.s could not be found."
+  echo
+  exit 2
+fi
+
+echo "Compiling your echo code..."
+${CPP} ${=CFLAGS} -static -g -o $libdir/test_echo echo.s
+if [[ $? -ne 0 ]]; then
+  echo "Uh oh. Compiling echo.s failed."
+  exit 2
+fi
+echo "Compiled successfully. Let's run the tests..."
+echo
+
+echoparams=(
+  "a b   c"
+  "Hi there, $USER"
+  "'eep opp' 'ork' 'ah ah'"
+  "eenie meenie miney mo"
+  "n is usually small"
+)
+
+for params in $echoparams; do
+  echo "Echoing ${=params}..."
+  (cd $libdir && qemu-arm $libdir/test_echo ${=params} > $libdir/echo.out)
+  diff =(echo ${=params}) $libdir/echo.out >& /dev/null
+  if [[ $? -ne 0 ]]; then
+    echo "RESULT: UH OH. Echo didn't give print the expected result."
+    diff =(echo ${=params}) $libdir/echo.out | grep "No newline at end of file" >/dev/null
+    if [[ $? -eq 0 ]]; then
+      echo "Output from running \"./echo ${=params}\" doesn't end in a newline." >&2
+    elif [[ $isgrader -eq 0 ]]; then
+      echo -n "Run vimdiff? (Hit :qa to quit.) [y] or n: "
+      read answer
+      if [[ "$answer" != "n" ]]; then
+        vimdiff -b -R =(echo ${=params}) $libdir/echo.out
+      fi  
+    fi
+    echo
+    exit 2
+  else
+    echo "RESULT: OK."
+    echo
+  fi
+done
+
+# ---------------------------------------------------------------------------- 
+
+if [[ $hay_trouble -eq 1 ]]; then
+  exit 2
+fi
+
+# Assert that a commit and push has happened or is about to happen.
+if [[ $isgrader -eq 0 ]]; then
+  # echo -n "Did you post your example program on Piazza in folder bleak_share? y or [n]? "
+  # read answer
+  # if [[ "$answer" != "y" ]]; then
+    # exit 2
+  # fi
+  # echo
+
+  echo "Have you added any unadded files, committed, and pushed to Bitbucket?"
+  echo -n "Run \"git status\" if you don't know. y or [n]? "
+  read answer
+  echo
+  if [[ "$answer" != "y" ]]; then
+    exit 2
+  fi
+fi
+
+exit 0

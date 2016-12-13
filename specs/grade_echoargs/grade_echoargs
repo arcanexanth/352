@@ -1,0 +1,117 @@
+#!/usr/bin/env zsh
+
+# ---------------------------------------------------------------------------- 
+
+# Assert that each file has the required tokens.
+function check_tokens() {
+  file=$1
+  shift
+  for i in $*; do
+    grep -- $i $file >/dev/null
+    if [[ $? -ne 0 ]]; then
+      echo "Yikes! Expected $i in $file not found." >& 2
+      exit 1
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------- 
+
+iskey=0
+isgrader=0
+onlylater=0
+while getopts lkg opt; do
+  case $opt in
+    (k)
+      iskey=1
+      ;;
+    (g)
+      isgrader=1
+      ;;
+    (l)
+      onlylater=1
+      ;;
+  esac
+done
+
+graderdir=${0:A:h}
+srcdir=$(pwd)
+basedir=${srcdir:t}
+tmp="${srcdir}/.tmp"
+name="echoargs"
+
+# Assert that we're in the right directory.
+if [[ $basedir != $name ]]; then
+  echo "Oh no! The grader must be run from the $name directory." >&2
+  exit 1
+fi
+
+# Assert that all required files exist.
+expected_files=(echoargs)
+for i in $expected_files; do
+  if [[ ! -f $i ]]; then
+    echo "Whoops! Expected file $i not found." >&2
+    exit 1
+  fi
+done
+
+# Assert script is executable.
+for i in $expected_files; do
+  if [[ ! -x $i ]]; then
+    echo "Whoops! File $i is not executable. Check permissions?" >&2
+    exit 1
+  fi
+done
+
+# Assert that actual results match expected on all input test cases.
+hay_trouble=0
+for in_file in $graderdir/tests/ins/*; do
+  expected_file=$graderdir/tests/expecteds/${in_file:r:t}.expected
+  actual_file=$tmp/${in_file:t:r}.actual
+  ./echoargs $(cat $in_file) > $actual_file
+
+  # If we're in key-building mode, we want to use the actual output
+  # the expected output as well -- 'cuz this is the key and it's so
+  # right!
+  if [[ $iskey -eq 1 ]]; then
+    \cp -f $actual_file $expected_file
+  fi
+
+  diff $expected_file $actual_file >/dev/null
+  if [[ $? -ne 0 ]]; then
+    hay_trouble=1
+    diff $expected_file $actual_file | grep "No newline at end of file" >/dev/null
+    if [[ $? -eq 0 ]]; then
+      echo "Ack! Output from processing $in_file doesn't end in a newline." >&2
+    else
+      echo "Ughh. Differences were detected when processing $in_file. "
+      echo -n "Run vimdiff? (Hit :qa to quit.) [y] or n: "
+      read answer
+      if [[ "$answer" != "n" ]]; then
+        vimdiff -b -R $expected_file $actual_file
+      fi  
+    fi
+  fi
+done
+
+if [[ $hay_trouble -eq 1 ]]; then
+  exit 2
+fi
+
+# Don't need manual checks for key. Bail.
+if [[ $iskey -eq 1 ]]; then
+  exit 0
+fi
+
+# Assert that a commit and push has happened or is about to happen.
+if [[ $isgrader -eq 0 ]]; then
+  echo
+  echo "Have you added any unadded files, committed, and pushed to Bitbucket?"
+  echo -n "Run \"git status\" if you don't know. y or [n]? "
+  read answer
+  if [[ "$answer" != "y" ]]; then
+    exit 2
+  fi
+fi
+
+exit 0

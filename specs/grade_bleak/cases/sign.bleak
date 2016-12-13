@@ -1,0 +1,9 @@
+input r5 <- read
+jpos r5 positive
+jneg r5 negative
+output 0
+jmp read
+output 1 <- positive
+jmp read
+output -1 <- negative
+jmp read

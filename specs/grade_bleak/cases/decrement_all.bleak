@@ -1,0 +1,11 @@
+store r9 8
+input [r9] <- read
+dec r9
+jneg r9 next
+jmp read
+store r9 8 <- next
+dec [r9] <- decrement
+jzilch r9 done
+dec r9
+jmp decrement
+output 0 <- done

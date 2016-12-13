@@ -1,0 +1,13 @@
+/*
+* If sel=1 then b, else a
+*/
+CHIP Mux {
+   IN a, b, sel;
+   OUT out;
+
+   PARTS:
+   And(a=b, b=sel, out=o1);
+   Not(in=sel, out=nSel);
+   And(a=a, b=nSel, out=o2);
+   Or(a=o1, b=o2, out=out);
+}

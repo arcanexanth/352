@@ -1,0 +1,58 @@
+#!/usr/bin/env zsh
+
+if [[ $# -ne 2 ]]; then
+  echo "Usage: debug source-file input-file" >&2
+  exit 1
+fi
+
+src=$1
+input=$2
+
+# ---------------------------------------------------------------------------- 
+
+graderdir=${0:A:h}
+srcdir=$(pwd)
+libdir=$srcdir/../.tmp
+basedir=${srcdir:t}
+tmp="${srcdir}/.tmp"
+name="bleak"
+
+mkdir -p $libdir
+
+# ---------------------------------------------------------------------------- 
+
+# Assert that we're in the right directory.
+if [[ $basedir != $name ]]; then
+  echo "Oh no! The grader must be run from the $name directory." >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------- 
+
+expected_files=(BleakVirtualMachine.h BleakVirtualMachine.cpp)
+for i in $expected_files; do
+  if [[ ! -f $i ]]; then
+    echo "Whoops! Expected file $i not found." >&2
+    exit 1
+  fi
+done
+
+# ---------------------------------------------------------------------------- 
+
+CPP=g++
+CFLAGS="-g -std=c++11"
+
+if [[ ! ( ${libdir}/debug_bleak -nt BleakVirtualMachine.cpp ) || ( ! ${libdir}/debug_bleak -nt BleakVirtualMachine.h ) ]]; then
+  echo "Compiling and linking your code and the debugger..." >&2
+  $CPP ${=CFLAGS} -I. -o $libdir/debug_bleak $graderdir/debugger.cpp BleakVirtualMachine.cpp -lcurses
+  if [[ $? -ne 0 ]]; then
+    exit 1
+  fi
+  echo "Compilation successful." >&2
+  echo
+fi
+
+# ---------------------------------------------------------------------------- 
+
+echo "Debugging source $src on input $input..." >&2
+$libdir/debug_bleak $src $input

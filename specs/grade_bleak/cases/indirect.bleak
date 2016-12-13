@@ -1,0 +1,4 @@
+store r0 9
+store [r0] 10 <- fill
+dec r0
+jpos r0 fill

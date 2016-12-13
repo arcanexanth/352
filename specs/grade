@@ -1,0 +1,82 @@
+#!/usr/bin/env zsh
+
+course="cs352"
+
+# Lock down any new files we make so that only the user can access them.
+umask 077
+
+# If we're a key, we'll use our actual results to generate the expected
+# results. If we're a grader, we'll omit certain checks that are more
+# directed to students.
+iskey=0
+isgrader=0
+onlylater=1
+while getopts lkg opt; do
+  case $opt in
+    (k)
+      iskey=1
+      ;;
+    (g)
+      isgrader=1
+      ;;
+    (l)
+      onlylater=1
+  esac
+done
+
+hwdirs=(echoargs bleak baseball gates alumem computer armoir)
+
+srcdir=$(pwd)
+basename=${srcdir:t}
+prefix=${0:h}
+grader_status=1
+
+if [[ -n ${(M)hwdirs:#${basename}} ]]; then
+  hw=$basename
+  if [[ -f $prefix/grade_$hw/grade_$hw ]]; then
+    # Make temporary directory.
+    tmp="${srcdir}/.tmp"
+    mkdir -p $tmp
+
+    zsh $prefix/grade_$hw/grade_$hw $@
+
+    grader_status=$?
+    if [[ $grader_status -eq 1 ]]; then
+      echo "Your solution is not complete enough to qualify for later-week submission."
+    elif [[ $grader_status -eq 2 || $grader_status -gt 130 ]]; then
+      echo "You have completed enough requirements to qualify for later-week submission,"
+      echo "assuming you submit before the deadline. Keep fixing problems until all tests"
+      echo "pass."
+    elif [[ $grader_status -eq 0 ]]; then
+      if [[ $isgrader -eq 1 || $iskey -eq 1 ]]; then
+        echo "High five. All tests pass!"
+      else
+        echo "High five. All tests pass!"
+        echo
+        echo "If this is a resubmission of an assignment that you only partially"
+        echo "completed by its later-week submission deadline, we need to know"
+        echo "you're ready to submit the fully completed assignment. Is this a"
+        echo -n "resubmission? y or [n]: "
+        read answer
+        if [[ "$answer" == "y" ]]; then
+          echo
+          # TODO: Add TAs to recipient list.
+          # echo "$hw submitted by $USER." | mail -r $USER@uwec.edu -s "[CS 330] submit $hw" -c $USER@uwec.edu johnch@uwec.edu
+          echo -n "What is your UWEC username? "
+          read id
+          id=$(echo $id | sed -e 's/@.*//' -e 's/ //' | tr '[A-Z]' '[a-z]')
+          wget -q -O - "http://www.twodee.org/bin/submit.php?course=$course&username=$id&homework=$hw" >& /dev/null
+          echo
+          echo "A copy of the notification email was sent to you, but it probably got"
+          echo "quarantined."
+        fi 
+      fi
+    fi
+  else
+    echo "Sorry. The grader for $hw hasn't been written yet." >&2
+  fi
+else
+  echo "There's no homework assignment named $basename. Are you in the right directory?" >&2
+fi
+
+exit $grader_status

@@ -1,0 +1,5 @@
+output 3
+store r1 0
+jzilch r1 foo
+output 9
+output 8 <- foo

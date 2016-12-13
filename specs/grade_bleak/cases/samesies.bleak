@@ -1,0 +1,8 @@
+input r2 <- grab
+input r3
+sub r2 r3
+jzilch r2 same
+output 0
+jmp grab
+output 1 <- same
+jmp grab

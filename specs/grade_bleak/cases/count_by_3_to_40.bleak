@@ -1,0 +1,9 @@
+store r6 0
+store r5 40 <- check
+sub r5 r6
+jneg r5 done
+output r6
+inc r6
+add r6 2
+jmp check
+output -1 <- done

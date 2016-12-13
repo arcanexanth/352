@@ -1,0 +1,131 @@
+#!/usr/bin/env zsh
+
+# ---------------------------------------------------------------------------- 
+
+iskey=0
+isgrader=0
+onlylater=0
+while getopts kgl opt; do
+  case $opt in
+    (k)
+      iskey=1
+      ;;
+    (g)
+      isgrader=1
+      ;;
+    (l)
+      onlylater=1
+      ;;
+  esac
+done
+
+graderdir=${0:A:h}
+srcdir=$(pwd)
+basedir=${srcdir:t}
+libdir=../.tmp
+name="gates"
+
+mkdir -p $libdir
+
+# Assert that we're in the right directory.
+if [[ $basedir != $name ]]; then
+  echo "Oh no! The grader must be run from the $name directory." >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------- 
+
+# Assert that all required files exist.
+# for f in $files; do
+  # if [[ ! -f $f.hdl ]]; then
+    # echo "Whoops! Expected file $f.hdl not found." >&2
+    # exit 1
+  # fi
+# done
+
+# ---------------------------------------------------------------------------- 
+
+nand2tetrisdir=$libdir/nand2tetris
+if [[ ! -d $nand2tetrisdir ]]; then
+  echo "Downloading Nand2Tetris software suite..."
+  if [[ $isgrader -eq 0 ]]; then
+    out=/dev/stdout
+  else
+    out=/dev/null
+  fi
+  (cd $libdir &&
+   wget http://www.nand2tetris.org/software/nand2tetris.zip &&
+   unzip nand2tetris.zip) >& $out
+  echo
+fi
+
+echo "Copying over Or3 and Majority tests..."
+\cp -f $graderdir/Or3.{tst,cmp} $graderdir/Majority.{tst,cmp} $nand2tetrisdir/projects/01
+echo
+
+# ---------------------------------------------------------------------------- 
+
+errors=(0 0)
+level=1
+files=(Not And Or Xor Or3 Majority Mux DMux Not16 And16 Or16 Or8Way Mux16 Mux4Way16 Mux8Way16 DMux4Way DMux8Way)
+for f in $files; do
+  if [[ $f == "Mux16" ]]; then
+    level=2
+  fi
+
+  echo "Testing $f..."
+  if [[ ! -f $f.hdl ]]; then
+    echo "File $f.hdl could not be found."
+    errors[$level]=1
+  else
+    echo "Copying $f.{tst,cmp} to . for testing."
+    \cp -f $libdir/nand2tetris/projects/01/$f.{tst,cmp} .
+    echo "Executing \"source $libdir/nand2tetris/tools/HardwareSimulator.sh $f.tst\""
+    (source $libdir/nand2tetris/tools/HardwareSimulator.sh $f.tst > /dev/null)
+    okstatus=$?
+    if [[ $okstatus -eq 0 ]]; then
+      echo "RESULT: OK!"
+    else
+      echo "RESULT: FAILED!"
+      
+      if [[ $isgrader -eq 0 ]]; then
+        echo -n "Run vimdiff? (Hit :qa to quit.) [y] or n: "
+        read answer
+        if [[ "$answer" != "n" ]]; then
+          vimdiff -b -R $f.cmp $f.out
+        fi  
+      fi
+
+      errors[$level]=1
+    fi
+  fi
+  echo
+done
+
+# ---------------------------------------------------------------------------- 
+
+if [[ $errors[1] -gt 0 ]]; then
+  exit 1
+fi
+
+if [[ $errors[2] -gt 0 ]]; then
+  exit 2
+fi
+
+# Assert that a commit and push has happened or is about to happen.
+if [[ $isgrader -eq 0 ]]; then
+  echo -n "Did you use no more than 4 parts in Majority? y or [n]? "
+  read answer
+  if [[ "$answer" != "y" ]]; then
+    exit 2
+  fi
+  echo
+  echo "Have you added any unadded files, committed, and pushed to Bitbucket?"
+  echo -n "Run \"git status\" if you don't know. y or [n]? "
+  read answer
+  if [[ "$answer" != "y" ]]; then
+    exit 2
+  fi
+fi
+
+exit 0

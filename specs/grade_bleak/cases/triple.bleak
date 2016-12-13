@@ -1,0 +1,8 @@
+input r0 <- grab
+call triple
+output r9
+jmp grab
+store r9 r0 <- triple
+add r9 r0
+add r9 r0
+return

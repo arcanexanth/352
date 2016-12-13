@@ -1,0 +1,7 @@
+CHIP Buffer {
+    IN in;
+    OUT out;
+    PARTS:
+    Not(in=in, out=o1);
+    Not(in=o1, out=out);
+}

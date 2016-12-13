@@ -1,0 +1,165 @@
+#!/usr/bin/env zsh
+
+# ---------------------------------------------------------------------------- 
+
+# Assert that each file has the required tokens.
+function check_tokens() {
+  file=$1
+  shift
+  for i in $*; do
+    grep -- $i $file >/dev/null
+    if [[ $? -ne 0 ]]; then
+      echo "Yikes! Expected $i in $file not found." >& 2
+      exit 1
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------- 
+
+iskey=0
+isgrader=0
+onlylater=0
+while getopts lkg opt; do
+  case $opt in
+    (k)
+      iskey=1
+      ;;
+    (g)
+      isgrader=1
+      ;;
+    (l)
+      onlylater=1
+      ;;
+  esac
+done
+
+graderdir=${0:A:h}
+srcdir=$(pwd)
+libdir=$srcdir/../.tmp
+basedir=${srcdir:t}
+tmp="${srcdir}/.tmp"
+name="baseball"
+
+mkdir -p $libdir
+
+# Assert that we're in the right directory.
+if [[ $basedir != $name ]]; then
+  echo "Oh no! The grader must be run from the $name directory." >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------- 
+
+# Assert that all required files exist.
+expected_files=(Baseball.h Baseball.cpp Makefile main.cpp)
+for i in $expected_files; do
+  if [[ ! -f $i ]]; then
+    echo "Whoops! Expected file $i not found." >&2
+    exit 1
+  fi
+done
+
+check_tokens Makefile -g clean 
+
+# ---------------------------------------------------------------------------- 
+
+if [[ $isgrader -eq 0 ]]; then
+  # Assert that Makefile builds
+  make 2>&1 >/dev/null
+  if [[ ! -f Baseball.o ]]; then
+    echo "Uh oh! No Baseball.o found after running make." >&2
+    exit 1
+  fi
+
+  make clean 2>&1 >/dev/null
+  if [[ -f Baseball.o || -f main.o ]]; then
+    echo "Uh oh! Object files (*.o) found after running \"make clean\"." >&2
+    exit 1
+  fi
+  make 2>&1 >/dev/null
+fi
+
+# ---------------------------------------------------------------------------- 
+
+gtestdir=$libdir/googletest
+if [[ ! -d $gtestdir ]]; then
+  echo "Downloading Google Test..."
+  (cd $libdir &&
+   git clone https://github.com/google/googletest.git)
+  echo
+fi
+
+if [[ ! -f $libdir/googletest/build/lib/libgtest.a ]]; then
+  echo "Compiling Google Test..."
+  (cd $gtestdir &&
+   mkdir -p build &&
+   cd build &&
+   cmake -DCMAKE_INSTALL_PREFIX=. .. &&
+   make &&
+   make install > /dev/null)
+  echo
+fi
+
+# ---------------------------------------------------------------------------- 
+
+CPP=g++
+CFLAGS="-std=c++11"
+
+# ---------------------------------------------------------------------------- 
+
+echo "Compiling your code and the first batch of unit tests..."
+${CPP} ${=CFLAGS} -g -I. -I$gtestdir/build/include -o $libdir/test_baseball1 Baseball.cpp $graderdir/unit_tests1.cpp $gtestdir/build/lib/*.a -lpthread -lm
+if [[ $? -ne 0 ]]; then
+  echo "Uh oh. Compiling your *.cpp files against the first batch of unit tests failed."
+  exit 1
+fi
+echo "Compiled successfully."
+echo
+
+gotlater=0
+$libdir/test_baseball1
+if [[ $? -ne 0 ]]; then
+  echo "Oof. Not all unit tests in the first batch passed."
+  exit 1
+fi
+echo
+gotlater=1
+
+if [[ $onlylater -eq 1 ]]; then
+  exit 1
+fi
+
+echo "Compiling your code and the second batch of unit tests..."
+${CPP} ${=CFLAGS} -g -I. -I$gtestdir/build/include -o $libdir/test_baseball2 Baseball.cpp $graderdir/unit_tests2.cpp $gtestdir/build/lib/*.a -lpthread -lm
+if [[ $? -ne 0 ]]; then
+  echo "Uh oh. Compiling your *.cpp files against the second batch of unit tests failed."
+  exit 2
+fi
+echo "Compiled successfully."
+echo
+
+$libdir/test_baseball2
+if [[ $? -ne 0 ]]; then
+  echo "Oof. Not all unit tests in the second batch passed."
+  exit 2
+fi
+echo
+
+# ---------------------------------------------------------------------------- 
+
+if [[ $hay_trouble -eq 1 ]]; then
+  exit 2
+fi
+
+# Assert that a commit and push has happened or is about to happen.
+if [[ $isgrader -eq 0 ]]; then
+  echo "Have you added any unadded files, committed, and pushed to Bitbucket?"
+  echo -n "Run \"git status\" if you don't know. y or [n]? "
+  read answer
+  if [[ "$answer" != "y" ]]; then
+    exit 2
+  fi
+fi
+
+exit 0

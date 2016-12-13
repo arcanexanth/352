@@ -1,0 +1,24 @@
+store r1 10 <- start
+store r2 20
+store r3 30
+store r4 40
+store r5 50
+store r6 60
+store r7 70
+store r8 80
+store r9 90
+inc r1
+dec r2
+add r3 r4
+sub r4 r5
+inc r9
+inc r9
+inc r9
+inc r9
+inc r9
+inc r9
+inc r9
+inc r9
+inc r9
+dec r9
+output r7
